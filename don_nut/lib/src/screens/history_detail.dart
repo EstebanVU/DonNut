@@ -1,0 +1,195 @@
+import 'dart:convert';
+
+import 'package:don_nut/src/models/order.dart';
+import 'package:don_nut/src/models/producto.dart';
+import 'package:flutter/material.dart';
+import 'package:auto_size_text/auto_size_text.dart';
+import 'dart:async';
+import 'package:http/http.dart' as http;
+import '../utils/global.dart';
+import 'package:don_nut/src/utils/global.dart' as globals;
+
+class HistoryDetail extends StatefulWidget {
+  const HistoryDetail({Key? key}) : super(key: key);
+ 
+  @override
+  State<HistoryDetail> createState() => HistoryDetailState();
+}
+
+int subtotal = 0;
+
+class HistoryDetailState extends State<HistoryDetail> {
+  late Future<List<Order>> _listOrder; //Lista del carrito
+
+  Future<List<Order>> _getOrder(url) async {
+    final response = await http.get(Uri.parse(url), headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $token'
+    });
+    List<Order> orders = [];
+
+    if (response.statusCode == 200) {
+      String body = utf8.decode(response.bodyBytes);
+      final jsonData = jsonDecode(body);
+      print(jsonData["data"]['productos']);
+      for (var i in jsonData["data"]['productos']) {
+        orders.add(Order(
+            0,
+            i['cantidad'],
+            Producto(
+                i['producto']['idProducto'],
+                i['producto']['nombre'],
+                '',
+                '', //imgBanner
+                i['producto']['imgProducto'],
+                '',
+                '', //fechaRegistro
+                '',
+                '' //estado
+                )));
+      }
+      return orders;
+    } else if (response.statusCode == 401) {
+      //No autorizado para ver el carrito
+      return orders;
+    } else {
+      throw Exception('Error en la conexión');
+    }
+  }
+
+  //Lo primero que se ejecuta al abrir la pantalla
+  @override
+  void initState() {
+    super.initState();
+
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final arguments =
+    ModalRoute.of(context)!.settings.arguments as HistoryDetailArguments;
+    _listOrder = _getOrder(globals.url + "pedidos/"+arguments.idPedido.toString());
+    return Scaffold(
+      
+      backgroundColor: Colors.white,
+     appBar: PreferredSize(
+        //Barra superior de la pantalla
+        preferredSize: const Size.fromHeight(60.0),
+        child: AppBar(
+          backgroundColor: Colors.white,
+          iconTheme: const IconThemeData(color: Colors.black),
+          centerTitle: true,
+          title: Image.network(
+              'https://media.discordapp.net/attachments/775922349362642955/906604815361134592/logo.png?width=998&height=676',
+              height: 70,
+              width: 70),
+          elevation: 0,
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 30, right: 30, top: 10),
+              child: SizedBox(
+                width: 300,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children:  [
+                    const SizedBox(height: 40),
+                    Text("Pedido #"+arguments.idPedido.toString(),style: const TextStyle(color: Colors.black,fontWeight: FontWeight.w400, fontSize: 22),),
+                    const SizedBox(height: 10),
+                    Text("En "+arguments.estado,style: const TextStyle(color: Colors.black,fontWeight: FontWeight.w400, fontSize: 22),),
+                    const SizedBox(height: 20),
+                    Text(arguments.fechaRegistro,style: const TextStyle(color: Colors.black,fontWeight: FontWeight.w400, fontSize: 22),),
+                    const SizedBox(height: 20),
+                    orderItem(_listOrder),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+          ],
+        ),
+      ),
+    );
+  }
+}
+Widget orderItem(_orders) {
+  return FutureBuilder(
+    future: _orders,
+    builder: (context, snapshot) {
+      if (snapshot.hasData) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 22, top: 22),
+          child: ListView(
+            scrollDirection: Axis.vertical,
+            shrinkWrap: true,
+            primary: false,
+            physics: const NeverScrollableScrollPhysics(),
+            children: _getProductsOrder(snapshot.data, context),
+          ),
+              
+        );
+      } else if (snapshot.hasError) {
+        return const Text("Error al extraer la información");
+      }
+
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.only(top: 5),
+              child: CircularProgressIndicator()));
+    },
+  );
+  }
+
+List<Widget> _getProductsOrder(data, context) {
+  List<Widget> products = [];
+  for (var item in data) {
+    products.add(Container(
+      padding: const EdgeInsets.all(8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AutoSizeText(
+            item.cantidad .toString() + 'x ' + item.producto.nombre,
+            maxLines: 2,
+            textAlign: TextAlign.start,
+            style: const TextStyle(
+                color: Colors.black, fontSize: 18, fontWeight: FontWeight.w400),
+          ),
+          const SizedBox(height: 10),
+          AutoSizeText(
+            item.producto.descripcion,
+            maxLines: 2,
+            textAlign: TextAlign.start,
+            style: const TextStyle(color: Color(0xff707070), fontSize: 14),
+          ),
+          
+        ],
+      ),
+    ));
+
+    products.add(
+      const Divider(
+        height: 5,
+        thickness: 0.6,
+        color: Color(0xff707070),
+      ),
+    );
+    
+  }
+  return products;
+}
+class HistoryDetailArguments {
+  int idPedido;
+  String estado;
+  String fechaRegistro;
+  HistoryDetailArguments(
+      {required this.idPedido,
+      required this.estado,
+      required this.fechaRegistro,
+     });
+}
